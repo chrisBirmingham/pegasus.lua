@@ -1,3 +1,6 @@
+local mimetypes = require('mimetypes')
+local file = require('pegasus.file')
+
 -- solution by @cwarden - https://gist.github.com/cwarden/1207556
 local function catch(what)
    return what[1]
@@ -196,12 +199,48 @@ function Response:write(body, stayOpen)
   return self
 end
 
-function Response:writeFile(file, contentType)
+function Response:writeFile(path)
+  local contentType = mimetypes.guess(path)
   self:contentType(contentType)
   self:statusCode(200)
-  local value = file:read('*all')
-  self:write(value)
 
+  local body = file:open(path)
+  if body ~= nil then
+    self:write(body)
+  else
+    return nil
+  end
+
+  return self
+end
+
+function Response:sendFile(path)
+  local filename = ''
+  if string.find(path, '%/[^%/]*$') then
+    filname = string.sub(path, string.find(path, '%/[^%/]*$'))
+  else 
+      filename = path
+  end
+  self:contentType('application/octet-stream')
+  self:addHeader('Content-Disposition', 'attachment; filename="' .. filename .. '"')
+ 
+  local body = file:open(path)
+  if body ~= nil then
+    self:write(body)
+  else
+    return nil
+  end
+
+  return self
+end
+
+function Response:redirect(location)
+  self:statusCode(302)
+  self:addHeader('Date', os.date('!%a, %d %b %Y %T GMT', os.time())    )
+  self:addHeader('Location', location)
+  self.client:send(self.headFirstLine .. self:_getHeaders())
+  self.client:send('\r\n')
+  self.client:close()
   return self
 end
 
